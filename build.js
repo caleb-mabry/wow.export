@@ -351,6 +351,20 @@ const orderDependencies = (tree, mod) => {
 // Create a promisified version of zlib.deflate.
 const deflateBuffer = util.promisify(zlib.deflate);
 
+/**
+ * Set permissions for a file.
+ * @param {string} filePath Path to the file.
+ * @param {string} mode Permission mode (e.g., '755').
+ */
+const setPermissions = async (filePath, mode) => {
+	try {
+		await fsp.chmod(filePath, mode);
+		log.success('Set permissions *%s* on *%s*', mode, filePath);
+	} catch (err) {
+		log.error('Failed to set permissions on *%s*: %s', filePath, err.message);
+	}
+};
+
 (async () => {
 	const config = JSON.parse(await fsp.readFile(CONFIG_FILE));
 	const outDir = path.resolve(config.outputDirectory);
@@ -450,9 +464,11 @@ const deflateBuffer = util.promisify(zlib.deflate);
 				if (extractFilter(entryName)) {
 					const entryPath = entryName.substr(bundleName.length);
 					const entryDir = path.join(buildDir, path.dirname(entryPath));
-	
+					const fullPath = path.join(buildDir, entryPath); // Full path of the extracted file
+
 					await createDirectory(entryDir);
 					zip.extractEntryTo(entryName, entryDir, false, true);
+					await setPermissions(fullPath, '755')
 					extractCount++;
 				} else {
 					filterCount++;
@@ -509,7 +525,6 @@ const deflateBuffer = util.promisify(zlib.deflate);
 
 			// Create directory as needed.
 			await createDirectory(path.dirname(targetPath));
-
 			zip.addLocalFolder(path.resolve(source), path.basename(target, '.zip'));
 			zip.writeZip(targetPath);
 		}
@@ -521,6 +536,7 @@ const deflateBuffer = util.promisify(zlib.deflate);
 			let xml = await fsp.readFile(xmlPath, 'utf8');
 			xml =  xml.replace(/(<key>CFBundleDisplayName<\/key>\n\t<string>)([^<]+)(<\/string>)/, util.format('$1%s$3', osxConfig.CFBundleDisplayName));
 			await fsp.writeFile(xmlPath, xml, 'utf8');
+			await setPermissions(xmlPath, '755')
 
 			// Adjust the CFBundleDisplayName value in the locale string list.
 			const infoPath = path.join(buildDir, osxConfig.infoStringsPath);
@@ -608,6 +624,8 @@ const deflateBuffer = util.promisify(zlib.deflate);
 			await fsp.writeFile(path.join(sourceTarget, bundleConfig.jsEntry), minified.code, 'utf8');
 			log.success('*%d* sources bundled *%s* -> *%s* (*%d%*)', moduleTree.length, filesize(rawSize), filesize(minified.code.length), 100 - Math.round((minified.code.length / rawSize) * 100));
 
+			await setPermissions(path.join(sourceTarget, bundleConfig.jsEntry), '755')
+
 			// Compile SCSS files into a single minified CSS output.
 			const sassEntry = path.join(sourceDirectory, bundleConfig.sassEntry);
 			log.info('Compiling stylesheet (entry: *%s*)...', sassEntry);
@@ -618,6 +636,7 @@ const deflateBuffer = util.promisify(zlib.deflate);
 			});
 
 			await fsp.writeFile(path.join(sourceTarget, bundleConfig.sassOut), sassBuild.css, 'utf8');
+			await setPermissions(path.join(sourceTarget, bundleConfig.sassOut), '755')
 			log.success('Compiled stylesheet (*%d* files) in *%ds*', sassBuild.stats.includedFiles.length, sassBuild.stats.duration / 1000);
 		}
 
@@ -684,6 +703,7 @@ const deflateBuffer = util.promisify(zlib.deflate);
 
 		const manifestPath = path.resolve(path.join(buildDir, build.manifestTarget));
 		await fsp.writeFile(manifestPath, JSON.stringify(manifest, null, '\t'));
+		await setPermissions(manifestPath, '755')
 		log.success('Manifest file written to *%s*', manifestPath);
 
 		// Create update bundle and manifest.
