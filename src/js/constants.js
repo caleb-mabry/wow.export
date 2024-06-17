@@ -9,8 +9,11 @@ const path = require('path');
 
 // Whether or not we're currently unit testing
 const isUnitTest = typeof nw === 'undefined';
+const isMac = process.platform === 'darwin';
 
-const INSTALL_PATH = isUnitTest ? process.cwd() : path.dirname(process.execPath);
+// process.execPath on a Mac is the NWJS Renderer folder
+const INSTALL_PATH = isUnitTest || isMac ? process.cwd() : path.dirname(process.execPath);
+
 const DATA_PATH = isUnitTest ? "./tests/user_data" : nw.App.dataPath;
 
 const UPDATER_EXT = { win32: '.exe', darwin: '.app' };
